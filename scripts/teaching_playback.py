@@ -6,6 +6,7 @@ import json
 import os
 import math
 import time
+import copy
 
 class TeachingPlayback:
     def __init__(self):
@@ -58,28 +59,31 @@ class TeachingPlayback:
             self.gripper.go()
         
         if command[4] == 1:
-            self.positions.append(self.arm.get_current_pose())
-            self.hands.append(self.gripper.get_current_joint_values())
+            self.positions.append(copy.deepcopy(self.pose))
+            self.hands.append(copy.deepcopy(self.hand))
             print("SAVE: "+str(len(self.positions)))
         elif command[4] == -1:
             self.positions.pop()
             self.hands.pop()
-            self.pose = self.positions[-1]
-            self.hand = self.hands[-1]
+            self.pose = copy.deepcopy(self.positions[-1])
+            self.hand = copy.deepcopy(self.hands[-1])
             self.arm.set_pose_target(self.pose)
             self.arm.go()
             self.gripper.set_joint_value_target(self.hand)
             self.gripper.go()
             print("DELETE: "+str(len(self.positions)))
         elif command[5] == 1:
+            i = 0
             for position, hand in zip(self.positions, self.hands):
-                print(position)
+                i += 1
+                print("INDEX: "+str(i))
+                #print(position)
                 self.arm.set_pose_target(position)
                 self.arm.go()
                 self.gripper.set_joint_value_target(hand)
                 self.gripper.go()
-            self.pose = self.positions[-1]
-            self.hand = self.hands[-1]
+            self.pose = copy.deepcopy(self.positions[-1])
+            self.hand = copy.deepcopy(self.hands[-1])
 
 if __name__ == '__main__':
     rospy.init_node("crane_x7_teaching_playback")
