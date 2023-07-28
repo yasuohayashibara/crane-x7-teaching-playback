@@ -7,6 +7,7 @@ import os
 import math
 import time
 import copy
+from moveit_msgs.msg import JointConstraint
 
 class TeachingPlayback:
     def __init__(self):
@@ -30,6 +31,16 @@ class TeachingPlayback:
         self.hand = self.gripper.get_current_joint_values()
         self.positions = []
         self.hands = []
+
+        joint_constraint = JointConstraint()
+        joint_constraint.joint_name = "crane_x7_upper_arm_revolute_part_twist_joint"
+        joint_constraint.position = 0
+        joint_constraint.tolerance_above = 0.1
+        joint_constraint.tolerance_below = 0.1
+        joint_constraint.weight = 0.5
+        constraints = moveit_commander.Constraints()
+        constraints.joint_constraints.append(joint_constraint)
+        self.arm.set_path_constraints(constraints)
     
     def update(self, event):
         command = [0,0,0,0,0,0]
