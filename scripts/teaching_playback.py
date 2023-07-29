@@ -23,7 +23,7 @@ class TeachingPlayback:
         self.arm.go()
 
         self.pose = self.arm.get_current_pose()
-        self.pose.pose.orientation.x = -math.sqrt(0.5)
+        self.pose.pose.orientation.x = math.sqrt(0.5)
         self.pose.pose.orientation.y = math.sqrt(0.5)
         self.pose.pose.orientation.z = 0
         self.pose.pose.orientation.w = 0
