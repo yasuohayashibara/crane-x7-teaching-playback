@@ -7,6 +7,14 @@ This is a node for teaching-playback using crane_x7.
 RT CORPORATION crane_x7  
 https://rt-net.jp/products/crane-x7/
 
+### Key assign
+
+2: x+, 8: x-, 6: y+, 4: y-, -: z+, +: z-  
+0: hand open, .: hand close  
+q: save position + increment index  
+w: delete position + decrement index  
+r: play positions  
+
 ### INSTALL
 
 - Down load source code
