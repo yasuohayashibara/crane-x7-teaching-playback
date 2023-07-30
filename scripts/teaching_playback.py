@@ -9,6 +9,15 @@ import time
 import copy
 from moveit_msgs.msg import JointConstraint
 
+def limit_value(value, min_value, max_value):
+    if value < min_value:
+        value = min_value
+        print("Out of range")
+    elif value > max_value:
+        value = max_value
+        print("Out of range")
+    return value
+
 class TeachingPlayback:
     def __init__(self):
         self.arm = moveit_commander.MoveGroupCommander("arm")
@@ -57,15 +66,17 @@ class TeachingPlayback:
 
         #print(command)
         if command[0] != 0 or command[1] != 0 or command[2] != 0:
-            self.pose.pose.position.x += command[0]*0.01
-            self.pose.pose.position.y += command[1]*0.01
-            self.pose.pose.position.z += command[2]*0.01
+            pos = self.pose.pose.position
+            pos.x = limit_value(pos.x + command[0]*0.01,  0.10, 0.27)
+            pos.y = limit_value(pos.y + command[1]*0.01, -0.25, 0.25)
+            pos.z = limit_value(pos.z + command[2]*0.01,  0.10, 0.31)
             self.arm.set_pose_target(self.pose)
             self.arm.go()
+            #print(self.pose.pose.position)
         
         if command[3] != 0:
-            self.hand[0] += command[3]*0.1
-            self.hand[1] += command[3]*0.1
+            self.hand[0] = limit_value(self.hand[0] + command[3]*0.1, 0.5, 0.9)
+            self.hand[1] = self.hand[0]
             self.gripper.set_joint_value_target(self.hand)
             self.gripper.go()
         
@@ -100,4 +111,8 @@ if __name__ == '__main__':
     rospy.init_node("crane_x7_teaching_playback")
     teaching_playback = TeachingPlayback()
     timer = rospy.Timer(rospy.Duration(0.1), teaching_playback.update)
-    rospy.spin()
+    try:
+        os.system('stty -echo')
+        rospy.spin()
+    finally:
+        os.system('stty echo')
