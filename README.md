@@ -1,5 +1,12 @@
 # crane-x7-teaching-playback
 
+This is a node for teaching-playback using crane_x7.
+
+[![IMAGE](http://img.youtube.com/vi/VvXfMvtXD0I/0.jpg)](https://youtu.be/VvXfMvtXD0I)
+
+RT CORPORATION crane_x7  
+https://rt-net.jp/products/crane-x7/
+
 ### INSTALL
 
 - Down load source code
