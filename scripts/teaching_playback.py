@@ -1,21 +1,21 @@
-#! /usr/bin/env python
+#!/usr/bin/env python3
 
 import rospy
 import moveit_commander
 import json
 import os
 import math
-import time
 import copy
 from moveit_msgs.msg import JointConstraint
+from tf.transformations import quaternion_from_euler
 
 def limit_value(value, min_value, max_value):
     if value < min_value:
-        value = min_value
         print("Out of range")
+        return min_value
     elif value > max_value:
-        value = max_value
         print("Out of range")
+        return max_value
     return value
 
 class TeachingPlayback:
@@ -25,21 +25,15 @@ class TeachingPlayback:
         self.arm.set_max_velocity_scaling_factor(0.2)
         self.arm.set_max_acceleration_scaling_factor(0.2)
 
-        self.gripper.set_joint_value_target([0.9, 0.9])
-        self.gripper.go()
-
-        self.arm.set_named_target("home")
-        self.arm.go()
-
-        self.pose = self.arm.get_current_pose()
-        self.pose.pose.orientation.x = math.sqrt(0.5)
-        self.pose.pose.orientation.y = math.sqrt(0.5)
-        self.pose.pose.orientation.z = 0
-        self.pose.pose.orientation.w = 0
+        self.reset_waiting = False
         self.last_modified = None
-        self.hand = self.gripper.get_current_joint_values()
         self.positions = []
         self.hands = []
+
+        self.set_home_pose()
+        self.pose = self.arm.get_current_pose()
+        self.set_downward_orientation()
+        self.hand = self.gripper.get_current_joint_values()
 
         joint_constraint = JointConstraint()
         joint_constraint.joint_name = "crane_x7_upper_arm_revolute_part_twist_joint"
@@ -50,9 +44,28 @@ class TeachingPlayback:
         constraints = moveit_commander.Constraints()
         constraints.joint_constraints.append(joint_constraint)
         self.arm.set_path_constraints(constraints)
-    
+
+    def set_downward_orientation(self):
+        q = quaternion_from_euler(0, math.pi, 0)
+        self.pose.pose.orientation.x = q[0]
+        self.pose.pose.orientation.y = q[1]
+        self.pose.pose.orientation.z = q[2]
+        self.pose.pose.orientation.w = q[3]
+
+    def set_home_pose(self):
+        self.gripper.set_joint_value_target([0.9, 0.9])
+        self.gripper.go()
+        self.arm.set_named_target("home")
+        self.arm.go()
+
+    def reset_to_vertical(self):
+        rospy.loginfo("Resetting to vertical pose...")
+        self.arm.set_named_target("vertical")
+        self.arm.go()
+        self.reset_waiting = True
+
     def update(self, event):
-        command = [0,0,0,0,0,0]
+        command = [0, 0, 0, 0, 0, 0]
         try:
             if os.path.exists('key_command.json'):
                 modified = os.path.getmtime('key_command.json')
@@ -62,53 +75,76 @@ class TeachingPlayback:
                         command_dict = json.load(f)
                         command = command_dict['command']
         except Exception as e:
-            print("Error occured: {e}")
+            print("Error occurred: {}".format(e))
 
-        #print(command)
+        if self.reset_waiting:
+            if any(c != 0 for c in command):
+                rospy.loginfo("Input detected. Returning to home.")
+                self.set_home_pose()
+                self.pose = self.arm.get_current_pose()
+                self.set_downward_orientation()
+                self.hand = self.gripper.get_current_joint_values()
+                self.reset_waiting = False
+            else:
+                return
+
         if command[0] != 0 or command[1] != 0 or command[2] != 0:
             pos = self.pose.pose.position
-            pos.x = limit_value(pos.x + command[0]*0.01,  0.10, 0.27)
-            pos.y = limit_value(pos.y + command[1]*0.01, -0.25, 0.25)
-            pos.z = limit_value(pos.z + command[2]*0.01,  0.10, 0.31)
+            pos.x = limit_value(pos.x + command[0] * 0.01, 0.10, 0.27)
+            pos.y = limit_value(pos.y + command[1] * 0.01, -0.25, 0.25)
+            pos.z = limit_value(pos.z + command[2] * 0.01, 0.10, 0.31)
             self.arm.set_pose_target(self.pose)
             self.arm.go()
-            #print(self.pose.pose.position)
-        
+
         if command[3] != 0:
-            self.hand[0] = limit_value(self.hand[0] + command[3]*0.1, 0.5, 0.9)
+            self.hand[0] = limit_value(self.hand[0] + command[3] * 0.1, 0.5, 0.9)
             self.hand[1] = self.hand[0]
             self.gripper.set_joint_value_target(self.hand)
             self.gripper.go()
-        
+
         if command[4] == 1:
             self.positions.append(copy.deepcopy(self.pose))
             self.hands.append(copy.deepcopy(self.hand))
-            print("SAVE: "+str(len(self.positions)))
+            print("SAVE: {}".format(len(self.positions)))
+
         elif command[4] == -1:
-            self.positions.pop()
-            self.hands.pop()
-            self.pose = copy.deepcopy(self.positions[-1])
-            self.hand = copy.deepcopy(self.hands[-1])
-            self.arm.set_pose_target(self.pose)
-            self.arm.go()
-            self.gripper.set_joint_value_target(self.hand)
-            self.gripper.go()
-            print("DELETE: "+str(len(self.positions)))
+            if self.positions:
+                self.positions.pop()
+                self.hands.pop()
+                if self.positions:
+                    self.pose = copy.deepcopy(self.positions[-1])
+                    self.hand = copy.deepcopy(self.hands[-1])
+                    self.arm.set_pose_target(self.pose)
+                    self.arm.go()
+                    self.gripper.set_joint_value_target(self.hand)
+                    self.gripper.go()
+                else:
+                    self.set_home_pose()
+                print("DELETE: {}".format(len(self.positions)))
+            else:
+                print("Nothing to delete")
+
         elif command[5] == 1:
-            i = 0
-            for position, hand in zip(self.positions, self.hands):
-                i += 1
-                print("INDEX: "+str(i))
-                #print(position)
-                self.arm.set_pose_target(position)
-                self.arm.go()
-                self.gripper.set_joint_value_target(hand)
-                self.gripper.go()
-            self.pose = copy.deepcopy(self.positions[-1])
-            self.hand = copy.deepcopy(self.hands[-1])
+            if self.positions:
+                for i, (position, hand) in enumerate(zip(self.positions, self.hands), start=1):
+                    print("INDEX: {}".format(i))
+                    self.arm.set_pose_target(position)
+                    self.arm.go()
+                    self.gripper.set_joint_value_target(hand)
+                    self.gripper.go()
+                self.pose = copy.deepcopy(self.positions[-1])
+                self.hand = copy.deepcopy(self.hands[-1])
+            else:
+                print("Nothing to playback")
+
+        elif command[5] == -1:
+            self.positions = []
+            self.hands = []
+            self.reset_to_vertical()
 
 if __name__ == '__main__':
     rospy.init_node("crane_x7_teaching_playback")
+    moveit_commander.roscpp_initialize([])
     teaching_playback = TeachingPlayback()
     timer = rospy.Timer(rospy.Duration(0.1), teaching_playback.update)
     try:
@@ -116,3 +152,4 @@ if __name__ == '__main__':
         rospy.spin()
     finally:
         os.system('stty echo')
+        moveit_commander.roscpp_shutdown()
