@@ -54,7 +54,7 @@ roslaunch crane_x7_bringup demo.launch fake_execution:=false
 - Keyboard capture (execute as a super user)
 ```
 roscd crane-x7-teaching-playback
-cd scrips
+cd scripts
 sudo python keyboard2command.py
 ```
 - Execute teaching-playback node
