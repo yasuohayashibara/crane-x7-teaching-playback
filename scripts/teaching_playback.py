@@ -54,14 +54,17 @@ class TeachingPlayback:
 
     def set_home_pose(self):
         self.gripper.set_joint_value_target([0.9, 0.9])
-        self.gripper.go()
+        if not self.gripper.go(wait=True):
+            rospy.logwarn("Failed to move gripper to home")
         self.arm.set_named_target("home")
-        self.arm.go()
+        if not self.arm.go(wait=True):
+            rospy.logwarn("Failed to move arm to home")
 
     def reset_to_vertical(self):
         rospy.loginfo("Resetting to vertical pose...")
         self.arm.set_named_target("vertical")
-        self.arm.go()
+        if not self.arm.go(wait=True):
+            rospy.logwarn("Failed to move arm to vertical")
         self.reset_waiting = True
 
     def update(self, event):
@@ -72,10 +75,15 @@ class TeachingPlayback:
                 if self.last_modified is None or modified > self.last_modified:
                     self.last_modified = modified
                     with open('key_command.json', 'r') as f:
-                        command_dict = json.load(f)
+                        content = f.read()
+                        if not content.strip():
+                            print("Empty command file.")
+                            return
+                        command_dict = json.loads(content)
                         command = command_dict['command']
         except Exception as e:
             print("Error occurred: {}".format(e))
+            return
 
         if self.reset_waiting:
             if any(c != 0 for c in command):
@@ -94,13 +102,18 @@ class TeachingPlayback:
             pos.y = limit_value(pos.y + command[1] * 0.01, -0.25, 0.25)
             pos.z = limit_value(pos.z + command[2] * 0.01, 0.10, 0.31)
             self.arm.set_pose_target(self.pose)
-            self.arm.go()
+            success, plan, _, _ = self.arm.plan()
+            if success:
+                self.arm.execute(plan, wait=True)
+            else:
+                rospy.logwarn("Failed to plan for pose target")
 
         if command[3] != 0:
             self.hand[0] = limit_value(self.hand[0] + command[3] * 0.1, 0.5, 0.9)
             self.hand[1] = self.hand[0]
             self.gripper.set_joint_value_target(self.hand)
-            self.gripper.go()
+            if not self.gripper.go(wait=True):
+                rospy.logwarn("Failed to move gripper")
 
         if command[4] == 1:
             self.positions.append(copy.deepcopy(self.pose))
@@ -109,17 +122,29 @@ class TeachingPlayback:
 
         elif command[4] == -1:
             if self.positions:
-                self.positions.pop()
-                self.hands.pop()
-                if self.positions:
-                    self.pose = copy.deepcopy(self.positions[-1])
-                    self.hand = copy.deepcopy(self.hands[-1])
-                    self.arm.set_pose_target(self.pose)
-                    self.arm.go()
-                    self.gripper.set_joint_value_target(self.hand)
-                    self.gripper.go()
+                if len(self.positions) > 1:
+                    target_pose = copy.deepcopy(self.positions[-2])
+                    target_hand = copy.deepcopy(self.hands[-2])
+                    self.positions.pop()
+                    self.hands.pop()
+                    self.arm.set_pose_target(target_pose)
+                    success, plan, _, _ = self.arm.plan()
+                    if success:
+                        self.arm.execute(plan, wait=True)
+                    else:
+                        rospy.logwarn("Failed to plan to pose after delete")
+                    self.gripper.set_joint_value_target(target_hand)
+                    if not self.gripper.go(wait=True):
+                        rospy.logwarn("Failed to move gripper after delete")
+                    self.pose = target_pose
+                    self.hand = target_hand
                 else:
+                    self.positions.pop()
+                    self.hands.pop()
                     self.set_home_pose()
+                    self.pose = self.arm.get_current_pose()
+                    self.set_downward_orientation()
+                    self.hand = self.gripper.get_current_joint_values()
                 print("DELETE: {}".format(len(self.positions)))
             else:
                 print("Nothing to delete")
@@ -129,9 +154,14 @@ class TeachingPlayback:
                 for i, (position, hand) in enumerate(zip(self.positions, self.hands), start=1):
                     print("INDEX: {}".format(i))
                     self.arm.set_pose_target(position)
-                    self.arm.go()
+                    success, plan, _, _ = self.arm.plan()
+                    if success:
+                        self.arm.execute(plan, wait=True)
+                    else:
+                        rospy.logwarn("Failed to plan during playback")
                     self.gripper.set_joint_value_target(hand)
-                    self.gripper.go()
+                    if not self.gripper.go(wait=True):
+                        rospy.logwarn("Failed to move gripper during playback")
                 self.pose = copy.deepcopy(self.positions[-1])
                 self.hand = copy.deepcopy(self.hands[-1])
             else:
