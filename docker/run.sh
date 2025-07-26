@@ -9,4 +9,4 @@ docker run -it \
   --volume="/tmp/.X11-unix:/tmp/.X11-unix:rw" \
   --volume="/dev:/dev" \
   --name open_campus \
-  open_campus
+  yasuohayashibara/open_campus:latest
