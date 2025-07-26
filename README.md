@@ -38,6 +38,22 @@ rosdep install -r -y --from-paths . --ignore-src
 catkin build
 ```
 
+### DOCKER
+
+- run docker
+```
+roscd crane-x7-teaching-playback
+cd docker
+./run.sh
+```
+
+- login docker
+```
+roscd crane-x7-teaching-playback
+cd docker
+./login.sh
+```
+
 ### Execute
 
 - Simulator
@@ -55,9 +71,11 @@ roslaunch crane_x7_bringup demo.launch fake_execution:=false
 ```
 roscd crane-x7-teaching-playback
 cd scripts
-sudo python keyboard2command.py
+sudo python3 keyboard2command.py
 ```
 - Execute teaching-playback node
 ```
+roscd crane-x7-teaching-playback
+cd scripts
 rosrun crane-x7-teaching-playback teaching_playback.py
 ```
